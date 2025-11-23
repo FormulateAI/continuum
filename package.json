@@ -1,0 +1,23 @@
+{
+    "name": "continuum-context-hub",
+    "version": "0.1.1",
+    "description": "The Infinite Memory Layer for Personalized AI",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "test": "jest"
+    },
+    "keywords": [
+        "ai",
+        "memory",
+        "llm",
+        "agent"
+    ],
+    "author": "Continuum AI",
+    "license": "Apache-2.0",
+    "devDependencies": {
+        "typescript": "^5.0.0",
+        "@types/node": "^20.0.0"
+    }
+}
