@@ -3,8 +3,11 @@
 **Continuum** is an open-source framework designed to give AI agents persistent, evolving context. It allows systems to retain information across sessions, adapt to user behavior, and recall complex relationships without the overhead of manual context management.
 
 [![PyPI](https://img.shields.io/pypi/v/continuum-context-hub?color=blue&label=pypi%20package)](https://pypi.org/project/continuum-context-hub/)
+[![GitHub](https://img.shields.io/badge/github-FormulateAI%2Fcontinuum-blue?logo=github)](https://github.com/FormulateAI/continuum)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-continuum.ai-orange)](https://docs.continuum.ai)
+
+**📦 PyPI:** https://pypi.org/project/continuum-context-hub/  
+**🔗 GitHub:** https://github.com/FormulateAI/continuum
 
 ---
 
