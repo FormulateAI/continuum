@@ -78,9 +78,11 @@ You are an AI agent working in a persistent development environment. You have ac
 To ensure seamless continuity between sessions (e.g., if the user switches to a different model or IDE), you must **record your progress** and **retrieve past context**.
 
 ## Tools Available
-You have access to a Python library `continuum.client`.
+You have access to the Continuum Python library.
 
+```python
 from continuum.client import hub
+```
 
 ## Rules of Engagement
 
