@@ -1,5 +1,6 @@
 import sqlite3
 import json
+import threading
 from datetime import datetime
 from typing import List, Optional
 from .models import (
@@ -10,12 +11,24 @@ from .config import DB_PATH, ensure_directories, IMPORTANCE_SCORES
 
 SCHEMA_VERSION = 1
 
+# Module-level connection pool: one connection per thread for write serialization
+_local = threading.local()
+
 
 def _connect() -> sqlite3.Connection:
+    conn = getattr(_local, 'conn', None)
+    if conn is not None:
+        try:
+            conn.execute("SELECT 1")
+            return conn
+        except sqlite3.ProgrammingError:
+            # Connection was closed; create a new one
+            pass
     ensure_directories()
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    _local.conn = conn
     return conn
 
 
@@ -69,7 +82,6 @@ def init_db():
               (SCHEMA_VERSION, datetime.utcnow().isoformat()))
 
     conn.commit()
-    conn.close()
 
 
 # --- Legacy functions (unchanged) ---
@@ -80,7 +92,6 @@ def create_session(session: Session):
     c.execute("INSERT INTO sessions VALUES (?, ?, ?)",
               (session.id, session.name, session.created_at.isoformat()))
     conn.commit()
-    conn.close()
 
 def get_session(session_id: str) -> Optional[Session]:
     conn = _connect()
@@ -88,7 +99,6 @@ def get_session(session_id: str) -> Optional[Session]:
     c.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
     row = c.fetchone()
     if not row:
-        conn.close()
         return None
 
     session = Session(id=row[0], name=row[1], created_at=datetime.fromisoformat(row[2]))
@@ -104,7 +114,6 @@ def get_session(session_id: str) -> Optional[Session]:
             timestamp=datetime.fromisoformat(item_row[5])
         ))
     session.items = items
-    conn.close()
     return session
 
 def add_context_item(session_id: str, item: ContextItem):
@@ -114,7 +123,6 @@ def add_context_item(session_id: str, item: ContextItem):
               (item.id, session_id, item.type, item.content,
                json.dumps(item.metadata), item.timestamp.isoformat()))
     conn.commit()
-    conn.close()
 
 
 # --- V2 Project functions ---
@@ -130,14 +138,12 @@ def find_or_create_project(name: str, path: Optional[str] = None,
         c.execute("SELECT * FROM projects WHERE path = ?", (path,))
         row = c.fetchone()
         if row:
-            conn.close()
             return _row_to_project(row)
 
     if git_remote:
         c.execute("SELECT * FROM projects WHERE git_remote = ?", (git_remote,))
         row = c.fetchone()
         if row:
-            conn.close()
             return _row_to_project(row)
 
     # Create new project
@@ -153,7 +159,6 @@ def find_or_create_project(name: str, path: Optional[str] = None,
               (project.id, project.name, project.path, project.git_remote,
                project.created_at.isoformat(), json.dumps(project.metadata)))
     conn.commit()
-    conn.close()
     return project
 
 
@@ -162,7 +167,6 @@ def get_project(project_id: str) -> Optional[Project]:
     c = conn.cursor()
     c.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
     row = c.fetchone()
-    conn.close()
     if not row:
         return None
     return _row_to_project(row)
@@ -173,7 +177,6 @@ def list_projects() -> List[Project]:
     c = conn.cursor()
     c.execute("SELECT * FROM projects ORDER BY created_at DESC")
     rows = c.fetchall()
-    conn.close()
     return [_row_to_project(r) for r in rows]
 
 
@@ -201,7 +204,6 @@ def create_memory(memory: MemoryItem) -> MemoryItem:
          memory.updated_at.isoformat(), memory.access_count,
          memory.last_accessed.isoformat() if memory.last_accessed else None))
     conn.commit()
-    conn.close()
     return memory
 
 
@@ -210,7 +212,6 @@ def get_memory(memory_id: str) -> Optional[MemoryItem]:
     c = conn.cursor()
     c.execute("SELECT * FROM memories WHERE id = ?", (memory_id,))
     row = c.fetchone()
-    conn.close()
     if not row:
         return None
     return _row_to_memory(row)
@@ -239,7 +240,6 @@ def update_memory(memory_id: str, **kwargs) -> Optional[MemoryItem]:
             values.append(val)
 
     if not updates:
-        conn.close()
         return get_memory(memory_id)
 
     updates.append("updated_at = ?")
@@ -248,7 +248,6 @@ def update_memory(memory_id: str, **kwargs) -> Optional[MemoryItem]:
 
     c.execute(f"UPDATE memories SET {', '.join(updates)} WHERE id = ?", values)
     conn.commit()
-    conn.close()
     return get_memory(memory_id)
 
 
@@ -258,7 +257,6 @@ def delete_memory(memory_id: str) -> bool:
     c.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
     deleted = c.rowcount > 0
     conn.commit()
-    conn.close()
     return deleted
 
 
@@ -287,7 +285,6 @@ def list_memories(project_id: str, category: Optional[str] = None,
 
     c.execute(query, params)
     rows = c.fetchall()
-    conn.close()
     return [_row_to_memory(r) for r in rows]
 
 
@@ -299,7 +296,6 @@ def record_memory_access(memory_id: str):
         "UPDATE memories SET access_count = access_count + 1, last_accessed = ? WHERE id = ?",
         (now, memory_id))
     conn.commit()
-    conn.close()
 
 
 def _row_to_memory(row) -> MemoryItem:

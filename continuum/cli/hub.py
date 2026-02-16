@@ -1,95 +1,127 @@
 import typer
-import requests
 import sys
 import json
+import os
 from typing import Optional
 
+from continuum.server.config import CONTINUUM_PORT
+
 app = typer.Typer(help="Continuum — Universal AI Memory Layer")
-SERVER_URL = "http://localhost:8000"
-
-
-# --- Legacy commands ---
-
-@app.command()
-def start(name: str):
-    """Start a new context session."""
-    try:
-        response = requests.post(f"{SERVER_URL}/session/start", params={"name": name})
-        response.raise_for_status()
-        typer.echo(f"Session '{name}' started. ID: {response.json()['id']}")
-    except requests.exceptions.ConnectionError:
-        typer.echo("Error: Could not connect to Context Hub server. Is it running?")
-    except Exception as e:
-        typer.echo(f"Error: {e}")
-
-@app.command()
-def push(content: str, type: str = "instruction"):
-    """Push a piece of context to the hub."""
-    item = {
-        "type": type,
-        "content": content,
-        "metadata": {}
-    }
-    try:
-        response = requests.post(f"{SERVER_URL}/context/add", json=item)
-        response.raise_for_status()
-        typer.echo("Context added.")
-    except Exception as e:
-        typer.echo(f"Error: {e}")
-
-@app.command()
-def pull(limit: int = 10):
-    """Pull the latest context."""
-    try:
-        response = requests.get(f"{SERVER_URL}/context/latest", params={"limit": limit})
-        response.raise_for_status()
-        items = response.json()
-        for item in items:
-            typer.echo(f"[{item['type']}] {item['timestamp']}")
-            typer.echo(f"{item['content']}")
-            typer.echo("-" * 20)
-    except Exception as e:
-        typer.echo(f"Error: {e}")
-
-@app.command()
-def search(query: str, limit: int = 5):
-    """Search context using semantic search."""
-    try:
-        payload = {"query": query, "limit": limit}
-        response = requests.post(f"{SERVER_URL}/context/search", json=payload)
-        response.raise_for_status()
-        results = response.json()
-
-        if not results:
-            typer.echo("No matching context found.")
-            return
-
-        for item in results:
-            typer.echo(f"[Score: {item['distance']:.4f}]")
-            typer.echo(f"{item['content']}")
-            typer.echo("-" * 20)
-
-    except Exception as e:
-        typer.echo(f"Error: {e}")
-
-@app.command()
-def status():
-    """Check server status."""
-    try:
-        response = requests.get(f"{SERVER_URL}/")
-        typer.echo(f"Server Status: {response.json()}")
-
-        sess_resp = requests.get(f"{SERVER_URL}/session/current")
-        if sess_resp.status_code == 200:
-            typer.echo(f"Active Session: {sess_resp.json()['name']}")
-        else:
-            typer.echo("No active session.")
-
-    except Exception as e:
-        typer.echo(f"Error: {e}")
 
 
 # --- V2 commands ---
+
+@app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", help="Host to bind to"),
+    port: Optional[int] = typer.Option(None, help="Port to listen on"),
+):
+    """Start the Continuum server."""
+    import uvicorn
+    uvicorn.run("continuum.server.main:app", host=host, port=port or CONTINUUM_PORT)
+
+
+@app.command()
+def push(
+    content: str = typer.Argument(..., help="Memory content to store"),
+    category: str = typer.Option("general", help="Memory category"),
+    importance: str = typer.Option("medium", help="Importance level"),
+    path: str = typer.Option(".", help="Project directory"),
+):
+    """Store a memory in the current project."""
+    path = os.path.abspath(path)
+    from continuum.core.service import ContinuumService
+    svc = ContinuumService()
+    project = svc.find_or_create_project(path=path)
+    memory = svc.store_memory(
+        project_id=project.id,
+        content=content,
+        category=category,
+        importance=importance,
+    )
+    typer.echo(f"Memory stored (id: {memory.id[:8]})")
+
+
+@app.command()
+def pull(
+    limit: int = typer.Option(20, help="Maximum memories to show"),
+    path: str = typer.Option(".", help="Project directory"),
+    category: Optional[str] = typer.Option(None, help="Filter by category"),
+):
+    """List recent memories for the current project."""
+    path = os.path.abspath(path)
+    from continuum.core.service import ContinuumService
+    from continuum.server import database
+    svc = ContinuumService()
+    project = svc.find_or_create_project(path=path)
+    memories = database.list_memories(project.id, category=category, limit=limit)
+
+    if not memories:
+        typer.echo("No memories found.")
+        return
+
+    for m in memories:
+        typer.echo(f"[{m.category.value}] [{m.importance.value}] {m.id[:8]}")
+        typer.echo(f"  {m.content}")
+        typer.echo(f"  Updated: {m.updated_at.isoformat()}")
+        typer.echo("-" * 40)
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Search query"),
+    limit: int = typer.Option(5, help="Maximum results"),
+    path: str = typer.Option(".", help="Project directory"),
+):
+    """Search memories using semantic search."""
+    path = os.path.abspath(path)
+    from continuum.core.service import ContinuumService
+    from continuum.server.models import MemorySearch
+    svc = ContinuumService()
+    project = svc.find_or_create_project(path=path)
+
+    search_req = MemorySearch(query=query, project_id=project.id, limit=limit)
+    results = svc.search_memories(search_req)
+
+    if not results:
+        typer.echo("No matching memories found.")
+        return
+
+    for r in results:
+        typer.echo(f"[Score: {r['score']:.4f}] {r['id'][:8]}")
+        typer.echo(f"  {r['content']}")
+        typer.echo("-" * 40)
+
+
+@app.command()
+def status(
+    path: str = typer.Option(".", help="Project directory"),
+):
+    """Show project info and memory counts."""
+    path = os.path.abspath(path)
+    from continuum.core.service import ContinuumService
+    from continuum.server import database
+    svc = ContinuumService()
+    project = svc.find_or_create_project(path=path)
+
+    memories = database.list_memories(project.id, limit=10000)
+    typer.echo(f"Project: {project.name}")
+    typer.echo(f"  ID:   {project.id[:8]}")
+    typer.echo(f"  Path: {project.path}")
+    if project.git_remote:
+        typer.echo(f"  Remote: {project.git_remote}")
+    typer.echo(f"  Total memories: {len(memories)}")
+
+    # Count by category
+    cat_counts: dict = {}
+    for m in memories:
+        cat = m.category.value
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    if cat_counts:
+        typer.echo("  By category:")
+        for cat, count in sorted(cat_counts.items()):
+            typer.echo(f"    {cat}: {count}")
+
 
 @app.command()
 def mcp():
@@ -104,7 +136,6 @@ def init(
     name: Optional[str] = typer.Option(None, help="Project name (defaults to directory name)"),
 ):
     """Register a project directory with Continuum."""
-    import os
     path = os.path.abspath(path)
     if not os.path.isdir(path):
         typer.echo(f"Error: '{path}' is not a directory.")
@@ -125,7 +156,6 @@ def generate(
     target: str = typer.Option("claude", help="Target format: claude, cursor, all"),
 ):
     """Generate tool configuration files from project memories."""
-    import os
     path = os.path.abspath(path)
 
     from continuum.core.service import ContinuumService
@@ -149,7 +179,6 @@ def sync(
     target: str = typer.Option("claude", help="Target format: claude, cursor, all"),
 ):
     """Bidirectional sync between Continuum memories and tool config files."""
-    import os
     path = os.path.abspath(path)
 
     from continuum.core.service import ContinuumService
