@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+
 import pytest
 
 # Override storage paths before any continuum imports
@@ -11,7 +12,7 @@ os.environ["CONTINUUM_DB_PATH"] = os.path.join(_tmpdir, "test.db")
 os.environ["CONTINUUM_CHROMA_PATH"] = os.path.join(_tmpdir, "chroma_db")
 
 from continuum.core.service import ContinuumService
-from continuum.server.models import MemoryCategory, Importance, MemorySearch
+from continuum.server.models import Importance, MemoryCategory, MemorySearch
 
 
 @pytest.fixture(autouse=True)

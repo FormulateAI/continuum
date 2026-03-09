@@ -1,8 +1,9 @@
 """Continuum MCP Server — exposes memory tools for Claude Code, Cursor, etc."""
 
 from mcp.server.fastmcp import FastMCP
+
 from continuum.core.service import ContinuumService
-from continuum.server.models import MemoryCategory, Importance, MemorySearch
+from continuum.server.models import Importance, MemoryCategory, MemorySearch
 
 mcp = FastMCP(
     "Continuum",
@@ -130,7 +131,9 @@ def get_project_context(project_path: str) -> str:
 
     categories = briefing.get("categories", {})
     if not categories:
-        return f"No memories stored yet for project '{project.name}'. Use 'remember' to start building project knowledge."
+        return (
+            f"No memories stored yet for project '{project.name}'. Use 'remember' to start building project knowledge."  # noqa: E501
+        )
 
     lines = [f"Project: {project.name} ({briefing['memory_count']} memories)\n"]
 

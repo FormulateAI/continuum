@@ -1,15 +1,16 @@
 """Legacy v1 endpoints — preserved for backward compatibility."""
 
+import uuid
+
 from fastapi import APIRouter, HTTPException
-from typing import Optional
-from ..models import Session, ContextItem, SearchQuery
+
 from .. import database
 from ..memory import memory_store
-import uuid
+from ..models import ContextItem, SearchQuery, Session
 
 router = APIRouter()
 
-current_session_id: Optional[str] = None
+current_session_id: str | None = None
 
 
 @router.post("/session/start")

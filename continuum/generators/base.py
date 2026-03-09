@@ -1,8 +1,7 @@
 """Abstract base class for tool-specific file generators."""
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
-
+from typing import Any
 
 MARKER = "<!-- CONTINUUM:MANAGED - DO NOT EDIT BELOW THIS LINE -->"
 
@@ -14,7 +13,7 @@ class BaseFileGenerator(ABC):
         ...
 
     @abstractmethod
-    def generate(self, memories_by_category: Dict[str, List[Dict[str, Any]]]) -> str:
+    def generate(self, memories_by_category: dict[str, list[dict[str, Any]]]) -> str:
         """Generate the managed section content from memories."""
         ...
 
@@ -27,8 +26,7 @@ class BaseFileGenerator(ABC):
         """Check if the file already has a Continuum marker."""
         return MARKER in file_content
 
-    def build_full_content(self, user_content: str,
-                           managed_content: str) -> str:
+    def build_full_content(self, user_content: str, managed_content: str) -> str:
         """Combine user content and managed section."""
         parts = []
         if user_content.strip():
@@ -40,15 +38,16 @@ class BaseFileGenerator(ABC):
         parts.append("")
         return "\n".join(parts)
 
-    def read_existing(self, filepath: str) -> Optional[str]:
+    def read_existing(self, filepath: str) -> str | None:
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError:
             return None
 
     def write(self, filepath: str, content: str):
         import os
+
         os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)

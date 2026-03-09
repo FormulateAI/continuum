@@ -1,9 +1,9 @@
 """V2 Project endpoints."""
 
 from fastapi import APIRouter, HTTPException
-from typing import List
+
 from ...core.service import ContinuumService
-from ..models import ProjectCreate, Project
+from ..models import Project, ProjectCreate
 
 router = APIRouter(prefix="/v2/projects", tags=["projects"])
 service = ContinuumService()
@@ -20,7 +20,7 @@ def create_project(body: ProjectCreate):
     return project
 
 
-@router.get("", response_model=List[Project])
+@router.get("", response_model=list[Project])
 def list_projects():
     return service.list_projects()
 

@@ -1,9 +1,11 @@
 """V2 Memory endpoints."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any, List
+
 from ...core.service import ContinuumService
-from ..models import MemoryCreate, MemoryUpdate, MemoryItem, MemorySearch
+from ..models import MemoryCreate, MemoryItem, MemorySearch, MemoryUpdate
 
 router = APIRouter(prefix="/v2/memories", tags=["memories"])
 service = ContinuumService()
@@ -61,7 +63,7 @@ context_router = APIRouter(prefix="/v2/projects", tags=["projects"])
 
 
 @context_router.get("/{project_id}/context")
-def get_project_context(project_id: str) -> Dict[str, Any]:
+def get_project_context(project_id: str) -> dict[str, Any]:
     project = service.get_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")

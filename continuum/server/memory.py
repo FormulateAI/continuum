@@ -1,20 +1,24 @@
 import math
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 from .config import (
-    CHROMA_PATH, ensure_directories, IMPORTANCE_SCORES,
-    SEARCH_WEIGHT_VECTOR, SEARCH_WEIGHT_IMPORTANCE, SEARCH_WEIGHT_FRESHNESS,
+    CHROMA_PATH,
+    IMPORTANCE_SCORES,
+    SEARCH_WEIGHT_FRESHNESS,
+    SEARCH_WEIGHT_IMPORTANCE,
+    SEARCH_WEIGHT_VECTOR,
     TEMPORAL_DECAY_RATE,
+    ensure_directories,
 )
 
 
 class Memory:
-    def __init__(self, persist_directory: Optional[str] = None):
+    def __init__(self, persist_directory: str | None = None):
         self._persist_directory = persist_directory or str(CHROMA_PATH)
         self._client = None
         self._model = None
-        self._collections: Dict[str, Any] = {}
+        self._collections: dict[str, Any] = {}
 
     @property
     def client(self):
@@ -22,17 +26,21 @@ class Memory:
             ensure_directories()
             import chromadb
             from chromadb.config import Settings
-            self._client = chromadb.Client(Settings(
-                persist_directory=self._persist_directory,
-                is_persistent=True,
-            ))
+
+            self._client = chromadb.Client(
+                Settings(
+                    persist_directory=self._persist_directory,
+                    is_persistent=True,
+                )
+            )
         return self._client
 
     @property
     def model(self):
         if self._model is None:
             from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer('all-MiniLM-L6-v2')
+
+            self._model = SentenceTransformer("all-MiniLM-L6-v2")
         return self._model
 
     def _get_collection(self, name: str = "continuum"):
@@ -45,7 +53,7 @@ class Memory:
 
     # --- Legacy interface (unchanged behavior) ---
 
-    def add(self, id: str, text: str, metadata: Dict[str, Any]):
+    def add(self, id: str, text: str, metadata: dict[str, Any]):
         embedding = self.model.encode(text).tolist()
         collection = self._get_collection("continuum")
         collection.add(
@@ -55,8 +63,7 @@ class Memory:
             ids=[id],
         )
 
-    def search(self, query: str, limit: int = 5,
-               filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    def search(self, query: str, limit: int = 5, filters: dict[str, Any] = None) -> list[dict[str, Any]]:
         query_embedding = self.model.encode(query).tolist()
         where_clause = filters if filters else None
         collection = self._get_collection("continuum")
@@ -66,20 +73,21 @@ class Memory:
             where=where_clause,
         )
         formatted = []
-        if results['ids']:
-            for i in range(len(results['ids'][0])):
-                formatted.append({
-                    "id": results['ids'][0][i],
-                    "content": results['documents'][0][i],
-                    "metadata": results['metadatas'][0][i],
-                    "distance": results['distances'][0][i] if results['distances'] else None,
-                })
+        if results["ids"]:
+            for i in range(len(results["ids"][0])):
+                formatted.append(
+                    {
+                        "id": results["ids"][0][i],
+                        "content": results["documents"][0][i],
+                        "metadata": results["metadatas"][0][i],
+                        "distance": results["distances"][0][i] if results["distances"] else None,
+                    }
+                )
         return formatted
 
     # --- V2 Memory interface ---
 
-    def add_memory(self, memory_id: str, project_id: str, text: str,
-                   metadata: Dict[str, Any]):
+    def add_memory(self, memory_id: str, project_id: str, text: str, metadata: dict[str, Any]):
         embedding = self.model.encode(text).tolist()
         col_name = self._project_collection_name(project_id)
         collection = self._get_collection(col_name)
@@ -98,9 +106,9 @@ class Memory:
         except Exception:
             pass
 
-    def search_memories(self, query: str, project_id: str,
-                        limit: int = 10,
-                        where: Optional[Dict] = None) -> List[Dict[str, Any]]:
+    def search_memories(
+        self, query: str, project_id: str, limit: int = 10, where: dict | None = None
+    ) -> list[dict[str, Any]]:
         query_embedding = self.model.encode(query).tolist()
         col_name = self._project_collection_name(project_id)
         collection = self._get_collection(col_name)
@@ -121,13 +129,13 @@ class Memory:
             where=where if where else None,
         )
 
-        if not results['ids'] or not results['ids'][0]:
+        if not results["ids"] or not results["ids"][0]:
             return []
 
         candidates = []
-        for i in range(len(results['ids'][0])):
-            meta = results['metadatas'][0][i] if results['metadatas'] else {}
-            distance = results['distances'][0][i] if results['distances'] else 1.0
+        for i in range(len(results["ids"][0])):
+            meta = results["metadatas"][0][i] if results["metadatas"] else {}
+            distance = results["distances"][0][i] if results["distances"] else 1.0
             # Convert distance to similarity (ChromaDB returns L2 distance)
             vector_score = 1.0 / (1.0 + distance)
 
@@ -152,15 +160,17 @@ class Memory:
                 + SEARCH_WEIGHT_FRESHNESS * freshness_score
             )
 
-            candidates.append({
-                "id": results['ids'][0][i],
-                "content": results['documents'][0][i],
-                "metadata": meta,
-                "score": round(combined_score, 4),
-                "vector_score": round(vector_score, 4),
-                "importance_score": importance_score,
-                "freshness_score": round(freshness_score, 4),
-            })
+            candidates.append(
+                {
+                    "id": results["ids"][0][i],
+                    "content": results["documents"][0][i],
+                    "metadata": meta,
+                    "score": round(combined_score, 4),
+                    "vector_score": round(vector_score, 4),
+                    "importance_score": importance_score,
+                    "freshness_score": round(freshness_score, 4),
+                }
+            )
 
         candidates.sort(key=lambda x: x["score"], reverse=True)
         return candidates[:limit]
@@ -181,5 +191,6 @@ def get_memory_store() -> Memory:
 class _LazyMemoryStore:
     def __getattr__(self, name):
         return getattr(get_memory_store(), name)
+
 
 memory_store = _LazyMemoryStore()

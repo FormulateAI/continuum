@@ -1,19 +1,19 @@
 """Generate .cursorrules from Continuum project memories."""
 
 import os
-from typing import List, Dict, Any
-from .base import BaseFileGenerator, MARKER
+from typing import Any
+
+from .base import MARKER, BaseFileGenerator
 
 
 class CursorRulesGenerator(BaseFileGenerator):
     def get_file_path(self, project_dir: str) -> str:
         return os.path.join(project_dir, ".cursorrules")
 
-    def generate(self, memories_by_category: Dict[str, List[Dict[str, Any]]]) -> str:
+    def generate(self, memories_by_category: dict[str, list[dict[str, Any]]]) -> str:
         lines = ["# Project Rules (Continuum)", ""]
 
-        order = ["conventions", "architecture", "patterns", "decisions",
-                 "debugging", "preferences", "general"]
+        order = ["conventions", "architecture", "patterns", "decisions", "debugging", "preferences", "general"]
 
         for cat in order:
             memories = memories_by_category.get(cat)

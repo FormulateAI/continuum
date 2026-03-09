@@ -1,6 +1,7 @@
-import requests
 import os
-from typing import Optional, Dict, Any, List
+from typing import Any
+
+import requests
 
 from continuum.server.config import CONTINUUM_PORT
 
@@ -10,7 +11,7 @@ class ContinuumClient:
         if server_url is None:
             server_url = f"http://localhost:{CONTINUUM_PORT}"
         self.server_url = server_url
-        self.project_id: Optional[str] = None
+        self.project_id: str | None = None
 
     def connect(self):
         """Check connection to the server."""
@@ -20,9 +21,9 @@ class ContinuumClient:
         except requests.exceptions.ConnectionError:
             return False
 
-    def get_or_create_project(self, name: str, path: Optional[str] = None) -> Dict[str, Any]:
+    def get_or_create_project(self, name: str, path: str | None = None) -> dict[str, Any]:
         """Create or retrieve a project, storing its ID for subsequent calls."""
-        payload: Dict[str, Any] = {"name": name}
+        payload: dict[str, Any] = {"name": name}
         if path:
             payload["path"] = os.path.abspath(path)
         response = requests.post(f"{self.server_url}/v2/projects", json=payload)
@@ -31,10 +32,14 @@ class ContinuumClient:
         self.project_id = project["id"]
         return project
 
-    def push_checkpoint(self, summary: str, details: str = "",
-                        metadata: Dict[str, Any] = None,
-                        category: str = "general",
-                        importance: str = "medium") -> bool:
+    def push_checkpoint(
+        self,
+        summary: str,
+        details: str = "",
+        metadata: dict[str, Any] = None,
+        category: str = "general",
+        importance: str = "medium",
+    ) -> bool:
         """Push a memory checkpoint to Continuum via v2 API."""
         if not self.project_id:
             print("Warning: No project set. Call get_or_create_project() first.")
@@ -42,7 +47,7 @@ class ContinuumClient:
 
         content = f"{summary}\n\n{details}".strip() if details else summary
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "project_id": self.project_id,
             "content": content,
             "category": category,
@@ -60,13 +65,13 @@ class ContinuumClient:
             print(f"Warning: Failed to push checkpoint to Continuum: {e}")
             return False
 
-    def search_memory(self, query: str, limit: int = 3) -> List[Dict[str, Any]]:
+    def search_memory(self, query: str, limit: int = 3) -> list[dict[str, Any]]:
         """Search for relevant memories via v2 API."""
         if not self.project_id:
             print("Warning: No project set. Call get_or_create_project() first.")
             return []
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "query": query,
             "project_id": self.project_id,
             "limit": limit,

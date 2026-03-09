@@ -1,8 +1,6 @@
-import typer
-import sys
-import json
 import os
-from typing import Optional
+
+import typer
 
 from continuum.server.config import CONTINUUM_PORT
 
@@ -11,13 +9,15 @@ app = typer.Typer(help="Continuum — Universal AI Memory Layer")
 
 # --- V2 commands ---
 
+
 @app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Host to bind to"),
-    port: Optional[int] = typer.Option(None, help="Port to listen on"),
+    port: int | None = typer.Option(None, help="Port to listen on"),
 ):
     """Start the Continuum server."""
     import uvicorn
+
     uvicorn.run("continuum.server.main:app", host=host, port=port or CONTINUUM_PORT)
 
 
@@ -31,6 +31,7 @@ def push(
     """Store a memory in the current project."""
     path = os.path.abspath(path)
     from continuum.core.service import ContinuumService
+
     svc = ContinuumService()
     project = svc.find_or_create_project(path=path)
     memory = svc.store_memory(
@@ -46,12 +47,13 @@ def push(
 def pull(
     limit: int = typer.Option(20, help="Maximum memories to show"),
     path: str = typer.Option(".", help="Project directory"),
-    category: Optional[str] = typer.Option(None, help="Filter by category"),
+    category: str | None = typer.Option(None, help="Filter by category"),
 ):
     """List recent memories for the current project."""
     path = os.path.abspath(path)
     from continuum.core.service import ContinuumService
     from continuum.server import database
+
     svc = ContinuumService()
     project = svc.find_or_create_project(path=path)
     memories = database.list_memories(project.id, category=category, limit=limit)
@@ -77,6 +79,7 @@ def search(
     path = os.path.abspath(path)
     from continuum.core.service import ContinuumService
     from continuum.server.models import MemorySearch
+
     svc = ContinuumService()
     project = svc.find_or_create_project(path=path)
 
@@ -101,6 +104,7 @@ def status(
     path = os.path.abspath(path)
     from continuum.core.service import ContinuumService
     from continuum.server import database
+
     svc = ContinuumService()
     project = svc.find_or_create_project(path=path)
 
@@ -127,13 +131,14 @@ def status(
 def mcp():
     """Launch the Continuum MCP server (stdio transport)."""
     from continuum.mcp.server import mcp as mcp_server
+
     mcp_server.run(transport="stdio")
 
 
 @app.command()
 def init(
     path: str = typer.Argument(".", help="Project directory to register"),
-    name: Optional[str] = typer.Option(None, help="Project name (defaults to directory name)"),
+    name: str | None = typer.Option(None, help="Project name (defaults to directory name)"),
 ):
     """Register a project directory with Continuum."""
     path = os.path.abspath(path)
@@ -142,6 +147,7 @@ def init(
         raise typer.Exit(1)
 
     from continuum.core.service import ContinuumService
+
     svc = ContinuumService()
     project = svc.find_or_create_project(name=name, path=path)
     typer.echo(f"Project '{project.name}' registered (id: {project.id[:8]})")
@@ -160,6 +166,7 @@ def generate(
 
     from continuum.core.service import ContinuumService
     from continuum.generators.sync import SyncManager
+
     svc = ContinuumService()
     project = svc.find_or_create_project(path=path)
     manager = SyncManager(svc)
@@ -183,6 +190,7 @@ def sync(
 
     from continuum.core.service import ContinuumService
     from continuum.generators.sync import SyncManager
+
     svc = ContinuumService()
     project = svc.find_or_create_project(path=path)
     manager = SyncManager(svc)

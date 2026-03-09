@@ -1,17 +1,18 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+import uuid
 from datetime import datetime
 from enum import Enum
-import uuid
+from typing import Any
 
+from pydantic import BaseModel, Field
 
 # --- Legacy models (backward compatible) ---
+
 
 class ContextItem(BaseModel):
     id: str = ""
     type: str  # "file", "diff", "instruction", "error"
     content: str
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
     timestamp: datetime = Field(default_factory=datetime.now)
 
     def __init__(self, **data):
@@ -19,19 +20,22 @@ class ContextItem(BaseModel):
         if not self.id:
             self.id = str(uuid.uuid4())
 
+
 class Session(BaseModel):
     id: str
     name: str
     created_at: datetime = Field(default_factory=datetime.now)
-    items: List[ContextItem] = []
+    items: list[ContextItem] = []
+
 
 class SearchQuery(BaseModel):
     query: str
     limit: int = 5
-    filters: Dict[str, Any] = {}
+    filters: dict[str, Any] = {}
 
 
 # --- V2 models ---
+
 
 class MemoryCategory(str, Enum):
     architecture = "architecture"
@@ -41,6 +45,7 @@ class MemoryCategory(str, Enum):
     decisions = "decisions"
     preferences = "preferences"
     general = "general"
+
 
 class Importance(str, Enum):
     critical = "critical"
@@ -52,17 +57,18 @@ class Importance(str, Enum):
 
 class ProjectCreate(BaseModel):
     name: str
-    path: Optional[str] = None
-    git_remote: Optional[str] = None
-    metadata: Dict[str, Any] = {}
+    path: str | None = None
+    git_remote: str | None = None
+    metadata: dict[str, Any] = {}
+
 
 class Project(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    path: Optional[str] = None
-    git_remote: Optional[str] = None
+    path: str | None = None
+    git_remote: str | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class MemoryCreate(BaseModel):
@@ -70,16 +76,18 @@ class MemoryCreate(BaseModel):
     content: str
     category: MemoryCategory = MemoryCategory.general
     importance: Importance = Importance.medium
-    source: Optional[str] = None
-    tags: List[str] = []
-    metadata: Dict[str, Any] = {}
+    source: str | None = None
+    tags: list[str] = []
+    metadata: dict[str, Any] = {}
+
 
 class MemoryUpdate(BaseModel):
-    content: Optional[str] = None
-    category: Optional[MemoryCategory] = None
-    importance: Optional[Importance] = None
-    tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    content: str | None = None
+    category: MemoryCategory | None = None
+    importance: Importance | None = None
+    tags: list[str] | None = None
+    metadata: dict[str, Any] | None = None
+
 
 class MemoryItem(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -87,17 +95,18 @@ class MemoryItem(BaseModel):
     content: str
     category: MemoryCategory = MemoryCategory.general
     importance: Importance = Importance.medium
-    source: Optional[str] = None
-    tags: List[str] = []
-    metadata: Dict[str, Any] = {}
+    source: str | None = None
+    tags: list[str] = []
+    metadata: dict[str, Any] = {}
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     access_count: int = 0
-    last_accessed: Optional[datetime] = None
+    last_accessed: datetime | None = None
+
 
 class MemorySearch(BaseModel):
     query: str
-    project_id: Optional[str] = None
-    categories: Optional[List[MemoryCategory]] = None
-    importance_min: Optional[Importance] = None
+    project_id: str | None = None
+    categories: list[MemoryCategory] | None = None
+    importance_min: Importance | None = None
     limit: int = 10

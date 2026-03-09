@@ -1,13 +1,17 @@
-import sqlite3
 import json
+import sqlite3
 import threading
 from datetime import datetime
-from typing import List, Optional
+
+from .config import DB_PATH, IMPORTANCE_SCORES, ensure_directories
 from .models import (
-    Session, ContextItem, Project, MemoryItem,
-    MemoryCategory, Importance,
+    ContextItem,
+    Importance,
+    MemoryCategory,
+    MemoryItem,
+    Project,
+    Session,
 )
-from .config import DB_PATH, ensure_directories, IMPORTANCE_SCORES
 
 SCHEMA_VERSION = 1
 
@@ -16,7 +20,7 @@ _local = threading.local()
 
 
 def _connect() -> sqlite3.Connection:
-    conn = getattr(_local, 'conn', None)
+    conn = getattr(_local, "conn", None)
     if conn is not None:
         try:
             conn.execute("SELECT 1")
@@ -37,29 +41,31 @@ def init_db():
     c = conn.cursor()
 
     # Legacy tables
-    c.execute('''CREATE TABLE IF NOT EXISTS sessions
-                 (id TEXT PRIMARY KEY, name TEXT, created_at TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS context_items
+    c.execute("""CREATE TABLE IF NOT EXISTS sessions
+                 (id TEXT PRIMARY KEY, name TEXT, created_at TEXT)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS context_items
                  (id TEXT PRIMARY KEY, session_id TEXT, type TEXT, content TEXT,
                   metadata TEXT, timestamp TEXT,
-                  FOREIGN KEY(session_id) REFERENCES sessions(id))''')
+                  FOREIGN KEY(session_id) REFERENCES sessions(id))""")
 
     # Schema version tracking
-    c.execute('''CREATE TABLE IF NOT EXISTS schema_version
-                 (version INTEGER PRIMARY KEY, applied_at TEXT)''')
+    c.execute("""CREATE TABLE IF NOT EXISTS schema_version
+                 (version INTEGER PRIMARY KEY, applied_at TEXT)""")
 
     # V2 tables
-    c.execute('''CREATE TABLE IF NOT EXISTS projects
+    c.execute("""CREATE TABLE IF NOT EXISTS projects
                  (id TEXT PRIMARY KEY,
                   name TEXT NOT NULL,
                   path TEXT,
                   git_remote TEXT,
                   created_at TEXT NOT NULL,
-                  metadata TEXT DEFAULT '{}')''')
-    c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_path ON projects(path) WHERE path IS NOT NULL')
-    c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_git_remote ON projects(git_remote) WHERE git_remote IS NOT NULL')
+                  metadata TEXT DEFAULT '{}')""")
+    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_path ON projects(path) WHERE path IS NOT NULL")
+    c.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_git_remote ON projects(git_remote) WHERE git_remote IS NOT NULL"
+    )  # noqa: E501
 
-    c.execute('''CREATE TABLE IF NOT EXISTS memories
+    c.execute("""CREATE TABLE IF NOT EXISTS memories
                  (id TEXT PRIMARY KEY,
                   project_id TEXT NOT NULL,
                   content TEXT NOT NULL,
@@ -72,28 +78,28 @@ def init_db():
                   updated_at TEXT NOT NULL,
                   access_count INTEGER DEFAULT 0,
                   last_accessed TEXT,
-                  FOREIGN KEY(project_id) REFERENCES projects(id))''')
-    c.execute('CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance)')
+                  FOREIGN KEY(project_id) REFERENCES projects(id))""")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_id)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance)")
 
     # Record schema version
-    c.execute('INSERT OR IGNORE INTO schema_version VALUES (?, ?)',
-              (SCHEMA_VERSION, datetime.utcnow().isoformat()))
+    c.execute("INSERT OR IGNORE INTO schema_version VALUES (?, ?)", (SCHEMA_VERSION, datetime.utcnow().isoformat()))
 
     conn.commit()
 
 
 # --- Legacy functions (unchanged) ---
 
+
 def create_session(session: Session):
     conn = _connect()
     c = conn.cursor()
-    c.execute("INSERT INTO sessions VALUES (?, ?, ?)",
-              (session.id, session.name, session.created_at.isoformat()))
+    c.execute("INSERT INTO sessions VALUES (?, ?, ?)", (session.id, session.name, session.created_at.isoformat()))
     conn.commit()
 
-def get_session(session_id: str) -> Optional[Session]:
+
+def get_session(session_id: str) -> Session | None:
     conn = _connect()
     c = conn.cursor()
     c.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
@@ -106,30 +112,35 @@ def get_session(session_id: str) -> Optional[Session]:
     c.execute("SELECT * FROM context_items WHERE session_id = ? ORDER BY timestamp", (session_id,))
     items = []
     for item_row in c.fetchall():
-        items.append(ContextItem(
-            id=item_row[0],
-            type=item_row[2],
-            content=item_row[3],
-            metadata=json.loads(item_row[4]),
-            timestamp=datetime.fromisoformat(item_row[5])
-        ))
+        items.append(
+            ContextItem(
+                id=item_row[0],
+                type=item_row[2],
+                content=item_row[3],
+                metadata=json.loads(item_row[4]),
+                timestamp=datetime.fromisoformat(item_row[5]),
+            )
+        )
     session.items = items
     return session
+
 
 def add_context_item(session_id: str, item: ContextItem):
     conn = _connect()
     c = conn.cursor()
-    c.execute("INSERT INTO context_items VALUES (?, ?, ?, ?, ?, ?)",
-              (item.id, session_id, item.type, item.content,
-               json.dumps(item.metadata), item.timestamp.isoformat()))
+    c.execute(
+        "INSERT INTO context_items VALUES (?, ?, ?, ?, ?, ?)",
+        (item.id, session_id, item.type, item.content, json.dumps(item.metadata), item.timestamp.isoformat()),
+    )
     conn.commit()
 
 
 # --- V2 Project functions ---
 
-def find_or_create_project(name: str, path: Optional[str] = None,
-                           git_remote: Optional[str] = None,
-                           metadata: Optional[dict] = None) -> Project:
+
+def find_or_create_project(
+    name: str, path: str | None = None, git_remote: str | None = None, metadata: dict | None = None
+) -> Project:
     conn = _connect()
     c = conn.cursor()
 
@@ -148,6 +159,7 @@ def find_or_create_project(name: str, path: Optional[str] = None,
 
     # Create new project
     import uuid
+
     project = Project(
         id=str(uuid.uuid4()),
         name=name,
@@ -155,14 +167,22 @@ def find_or_create_project(name: str, path: Optional[str] = None,
         git_remote=git_remote,
         metadata=metadata or {},
     )
-    c.execute("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?)",
-              (project.id, project.name, project.path, project.git_remote,
-               project.created_at.isoformat(), json.dumps(project.metadata)))
+    c.execute(
+        "INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            project.id,
+            project.name,
+            project.path,
+            project.git_remote,
+            project.created_at.isoformat(),
+            json.dumps(project.metadata),
+        ),
+    )
     conn.commit()
     return project
 
 
-def get_project(project_id: str) -> Optional[Project]:
+def get_project(project_id: str) -> Project | None:
     conn = _connect()
     c = conn.cursor()
     c.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
@@ -172,7 +192,7 @@ def get_project(project_id: str) -> Optional[Project]:
     return _row_to_project(row)
 
 
-def list_projects() -> List[Project]:
+def list_projects() -> list[Project]:
     conn = _connect()
     c = conn.cursor()
     c.execute("SELECT * FROM projects ORDER BY created_at DESC")
@@ -193,21 +213,32 @@ def _row_to_project(row) -> Project:
 
 # --- V2 Memory functions ---
 
+
 def create_memory(memory: MemoryItem) -> MemoryItem:
     conn = _connect()
     c = conn.cursor()
     c.execute(
         "INSERT INTO memories VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (memory.id, memory.project_id, memory.content, memory.category.value,
-         memory.importance.value, memory.source, json.dumps(memory.tags),
-         json.dumps(memory.metadata), memory.created_at.isoformat(),
-         memory.updated_at.isoformat(), memory.access_count,
-         memory.last_accessed.isoformat() if memory.last_accessed else None))
+        (
+            memory.id,
+            memory.project_id,
+            memory.content,
+            memory.category.value,
+            memory.importance.value,
+            memory.source,
+            json.dumps(memory.tags),
+            json.dumps(memory.metadata),
+            memory.created_at.isoformat(),
+            memory.updated_at.isoformat(),
+            memory.access_count,
+            memory.last_accessed.isoformat() if memory.last_accessed else None,
+        ),
+    )
     conn.commit()
     return memory
 
 
-def get_memory(memory_id: str) -> Optional[MemoryItem]:
+def get_memory(memory_id: str) -> MemoryItem | None:
     conn = _connect()
     c = conn.cursor()
     c.execute("SELECT * FROM memories WHERE id = ?", (memory_id,))
@@ -217,7 +248,7 @@ def get_memory(memory_id: str) -> Optional[MemoryItem]:
     return _row_to_memory(row)
 
 
-def update_memory(memory_id: str, **kwargs) -> Optional[MemoryItem]:
+def update_memory(memory_id: str, **kwargs) -> MemoryItem | None:
     conn = _connect()
     c = conn.cursor()
 
@@ -260,9 +291,9 @@ def delete_memory(memory_id: str) -> bool:
     return deleted
 
 
-def list_memories(project_id: str, category: Optional[str] = None,
-                  importance_min: Optional[str] = None,
-                  limit: int = 100) -> List[MemoryItem]:
+def list_memories(
+    project_id: str, category: str | None = None, importance_min: str | None = None, limit: int = 100
+) -> list[MemoryItem]:
     conn = _connect()
     c = conn.cursor()
 
@@ -292,9 +323,7 @@ def record_memory_access(memory_id: str):
     conn = _connect()
     c = conn.cursor()
     now = datetime.utcnow().isoformat()
-    c.execute(
-        "UPDATE memories SET access_count = access_count + 1, last_accessed = ? WHERE id = ?",
-        (now, memory_id))
+    c.execute("UPDATE memories SET access_count = access_count + 1, last_accessed = ? WHERE id = ?", (now, memory_id))
     conn.commit()
 
 

@@ -1,13 +1,12 @@
 """Bidirectional sync between Continuum memories and tool config files."""
 
 import hashlib
-from typing import Optional, Dict, Any, List
+from typing import Any
 
-from .base import MARKER
+from continuum.server.models import Importance, MemoryCategory
+
 from .claude_md import ClaudeMdGenerator
 from .cursorrules import CursorRulesGenerator
-from continuum.server.models import MemoryCategory, Importance
-
 
 GENERATORS = {
     "claude": ClaudeMdGenerator(),
@@ -19,8 +18,7 @@ class SyncManager:
     def __init__(self, service):
         self.service = service
 
-    def generate(self, project_id: str, project_dir: str,
-                 target: str) -> Optional[str]:
+    def generate(self, project_id: str, project_dir: str, target: str) -> str | None:
         gen = GENERATORS.get(target)
         if not gen:
             return None
@@ -42,13 +40,12 @@ class SyncManager:
         gen.write(filepath, full)
         return filepath
 
-    def sync(self, project_id: str, project_dir: str,
-             target: str) -> Dict[str, Any]:
+    def sync(self, project_id: str, project_dir: str, target: str) -> dict[str, Any]:
         gen = GENERATORS.get(target)
         if not gen:
             return {}
 
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
         filepath = gen.get_file_path(project_dir)
         existing = gen.read_existing(filepath)
 
@@ -67,10 +64,9 @@ class SyncManager:
 
         return result
 
-    def _ingest_user_content(self, project_id: str, content: str,
-                             source: str) -> int:
+    def _ingest_user_content(self, project_id: str, content: str, source: str) -> int:
         """Parse user-written lines and store as memories if they're new."""
-        lines = [l.strip() for l in content.splitlines() if l.strip()]
+        lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
         count = 0
 
         for line in lines:
@@ -84,9 +80,7 @@ class SyncManager:
 
             # Check for duplicates via content hash
             content_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
-            existing = self.service.search_memories(
-                _build_search(text, project_id, limit=1)
-            )
+            existing = self.service.search_memories(_build_search(text, project_id, limit=1))
             # If top result is very similar (high score), skip
             if existing and existing[0].get("score", 0) > 0.85:
                 continue
@@ -106,4 +100,5 @@ class SyncManager:
 
 def _build_search(query: str, project_id: str, limit: int = 1):
     from continuum.server.models import MemorySearch
+
     return MemorySearch(query=query, project_id=project_id, limit=limit)
