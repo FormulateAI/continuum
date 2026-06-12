@@ -2,9 +2,15 @@ import os
 from pathlib import Path
 
 CONTINUUM_HOME = Path(os.environ.get("CONTINUUM_HOME", os.path.expanduser("~/.continuum")))
-DB_PATH = Path(os.environ.get("CONTINUUM_DB_PATH", str(CONTINUUM_HOME / "continuum.db")))
-CHROMA_PATH = Path(os.environ.get("CONTINUUM_CHROMA_PATH", str(CONTINUUM_HOME / "chroma_db")))
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://conversive:conversive@localhost:5433/continuum_dev",
+)
 CONTINUUM_PORT = int(os.environ.get("CONTINUUM_PORT", "8000"))
+
+# Embedding model and dimensions (all-MiniLM-L6-v2 → 384-dim)
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+EMBEDDING_DIM = 384
 
 # Importance score mapping
 IMPORTANCE_SCORES = {
@@ -23,8 +29,16 @@ SEARCH_WEIGHT_VECTOR = 0.60
 SEARCH_WEIGHT_IMPORTANCE = 0.25
 SEARCH_WEIGHT_FRESHNESS = 0.15
 
+# Extraction pipeline configuration
+EXTRACTION_AUTO_SAVE_THRESHOLD = float(os.environ.get("CONTINUUM_AUTO_SAVE_THRESHOLD", "0.85"))
+EXTRACTION_QUEUE_THRESHOLD = float(os.environ.get("CONTINUUM_QUEUE_THRESHOLD", "0.50"))
+EXTRACTION_TTL_HOURS = int(os.environ.get("CONTINUUM_EXTRACTION_TTL_HOURS", "24"))
+
+# Cross-project promotion
+ENABLE_PROMOTION = os.environ.get("CONTINUUM_ENABLE_PROMOTION", "true").lower() == "true"
+PROMOTION_THRESHOLD = float(os.environ.get("CONTINUUM_PROMOTION_THRESHOLD", "0.85"))
+PROMOTION_MIN_PROJECTS = int(os.environ.get("CONTINUUM_PROMOTION_MIN_PROJECTS", "3"))
+
 
 def ensure_directories():
-    """Create storage directories if they don't exist."""
     CONTINUUM_HOME.mkdir(parents=True, exist_ok=True)
-    CHROMA_PATH.mkdir(parents=True, exist_ok=True)

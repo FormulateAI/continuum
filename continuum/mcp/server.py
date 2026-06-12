@@ -3,6 +3,7 @@
 from mcp.server.fastmcp import FastMCP
 
 from continuum.core.service import ContinuumService
+from continuum.server import database
 from continuum.server.models import Importance, MemoryCategory, MemorySearch
 
 mcp = FastMCP(
@@ -145,6 +146,77 @@ def get_project_context(project_path: str) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+@mcp.tool()
+def get_org_standards(org_slug: str, category: str = "") -> str:
+    """Get the organization's technology standards and rules.
+
+    Returns the tech rules, architecture constraints, and coding standards that
+    apply to every project in this org. Inject these at the start of every session.
+
+    Args:
+        org_slug: The org's unique slug identifier (e.g. "acme-corp")
+        category: Optional category filter (e.g. "architecture", "conventions", "security")
+    """
+    org = database.get_org_by_slug(org_slug)
+    if not org:
+        return f"Org '{org_slug}' not found. Create it first with the REST API."
+
+    standards = database.list_standards(org.id, category=category or None)
+    if not standards:
+        msg = f"No standards defined for org '{org.name}'"
+        if category:
+            msg += f" in category '{category}'"
+        return msg + ". Add standards via the REST API or 'set_org_standard' tool."
+
+    by_category: dict[str, list] = {}
+    for s in standards:
+        cat = s["category"]
+        by_category.setdefault(cat, []).append(s)
+
+    lines = [f"Org standards for {org.name}:\n"]
+    for cat, items in sorted(by_category.items()):
+        lines.append(f"## {cat.title()}")
+        for s in items:
+            line = f"  - {s['rule']}"
+            if s.get("rationale"):
+                line += f" ({s['rationale']})"
+            lines.append(line)
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def set_org_standard(
+    org_slug: str,
+    rule: str,
+    category: str = "general",
+    rationale: str = "",
+) -> str:
+    """Add or update an org-wide technology standard or rule.
+
+    Use this to codify decisions that apply across ALL projects in the org:
+    which database to use, naming conventions, security requirements, etc.
+
+    Args:
+        org_slug: The org's unique slug identifier
+        rule: The standard/rule to enforce (be specific and actionable)
+        category: One of: architecture, conventions, patterns, security, general
+        rationale: Why this standard exists (optional but recommended)
+    """
+    org = database.get_org_by_slug(org_slug)
+    if not org:
+        return f"Org '{org_slug}' not found."
+
+    std_id = database.upsert_standard(
+        org_id=org.id,
+        category=category,
+        rule=rule,
+        rationale=rationale or None,
+    )
+    return f"Standard saved [{std_id[:8]}] in '{org.name}' under '{category}': {rule}"
 
 
 @mcp.tool()
